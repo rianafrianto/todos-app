@@ -1,101 +1,288 @@
-import Image from "next/image";
+"use client"
+import { useState, useEffect } from 'react';
+import Navbar from './components/Navbar';
+import TodoList from './components/TodoList';
+import api from '@/lib/api';
+import Swal from 'sweetalert2';
+import CreateTask from './components/CreateTask';
+import EditTask from './components/EditTask';
+import { statusOptions } from '@/lib/status';
+import Empty from "../app/icon/empty.svg"
+import Image from 'next/image';
 
-export default function Home() {
+const HomePage = () => {
+  const [todos, setTodos] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([])
+  const [loading, setLoading] = useState(true);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [editingTaskTitle, setEditingTaskTitle] = useState('');
+  const [selectedTeamMember, setSelectedTeamMember] = useState('')
+  const [editSelectedTeamMember, setEditSelectedTeamMember] = useState('')
+  const [newTaskDescription, setNewTaskDescription] = useState('');
+  const [editingTaskDescription, setEditingTaskDescription] = useState("")
+  const [selectedStatus, setSelectedStatus] = useState('')
+  const [editingTaskStatus, setEditingTaskStatus] = useState('');
+  const [token, setToken] = useState(null);
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      setUser(JSON.parse(userData));
+    }
+  
+    const storedToken = localStorage.getItem('token');
+    if (storedToken) {
+      setToken(storedToken);
+    }
+  }, []);
+
+
+  // Fetch all todos list
+  const fetchTodos = async () => {
+    try {
+      const response = await api.get('/todos');
+      if (response.data.success) {
+        setTodos(response?.data?.data);
+      } else {
+        console.log(response.data.message);
+      }
+    } catch (err) {
+      Swal.fire({
+        title: 'Error!',
+        text: err.message,
+        icon: 'error',
+        confirmButtonText: 'Cool'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTodos();
+  }, []);
+
+  // Fetch all users
+  const fetchTeamMembers = async () => {
+    try {
+      const response = await api.get('/users');
+      if (response.data.success) {
+        const teamMembersData = response.data.data.filter(user => user.role === 'Team');
+        setTeamMembers(teamMembersData);
+      }
+    } catch (err) {
+      Swal.fire({
+        title: 'Error!',
+        text: err.message,
+        icon: 'error',
+        confirmButtonText: 'Cool',
+      });
+    }
+  };
+
+  useEffect(() => {
+    fetchTeamMembers();
+  }, []);
+
+  // Create Todos
+  const addTodo = async (newTask) => {
+    try {
+      const response = await api.post('/todos', newTask);
+      if (response.data.success) {
+        setTodos((prevTodos) => [...prevTodos, response.data.data]);
+        await fetchTodos()
+        Swal.fire({
+          title: 'success!',
+          text: response.data.message,
+          icon: 'success',
+          confirmButtonText: 'Tutup'
+        });
+      } else {
+        console.log(response.data.message);
+        Swal.fire({
+          title: 'Error!',
+          text: response.data.message,
+          icon: 'error',
+          confirmButtonText: 'Tutup'
+        });
+      }
+    } catch (err) {
+      Swal.fire({
+        title: 'Error!',
+        text: err.message,
+        icon: 'error',
+        confirmButtonText: 'Tutup'
+      });
+    }
+  };
+
+  const handleCreateTask = () => {
+    if (newTaskTitle.trim() === '' || !selectedTeamMember || newTaskDescription.trim() === '') return;
+
+    const newTask = {
+      title: newTaskTitle,
+      description: newTaskDescription,
+      status: selectedStatus,
+      assigned_to: Number(selectedTeamMember),
+      created_by: user?.id
+    };
+
+    addTodo(newTask);
+    setNewTaskTitle('');
+    setNewTaskDescription('');
+    setSelectedTeamMember('');
+    setSelectedStatus('');
+  };
+
+  const editTodo = async (editedTask) => {
+    try {
+      const response = await api.put('/todos', editedTask);
+      if (response.data.success) {
+        setTodos(todos.map(todo =>
+          todo.id === editedTask.id ? response.data.data : todo
+        ));
+        await fetchTodos();
+        Swal.fire({
+          title: 'Success!',
+          text: response.data.message,
+          icon: 'success',
+          confirmButtonText: 'Tutup'
+        });
+      } else {
+        console.log(response.data.message);
+        Swal.fire({
+          title: 'Error!',
+          text: response.data.message,
+          icon: 'error',
+          confirmButtonText: 'Tutup'
+        });
+      }
+    } catch (err) {
+      Swal.fire({
+        title: 'Error!',
+        text: err.message,
+        icon: 'error',
+        confirmButtonText: 'Tutup'
+      });
+    }
+  };
+  
+
+  const handleEditTask = (taskId) => {
+    const taskToEdit = todos.find(todo => todo.id === taskId);
+    if (taskToEdit) {
+      setEditingTaskId(taskId);
+      setEditingTaskTitle(taskToEdit.title);
+      setEditingTaskDescription(taskToEdit.description);
+      setEditSelectedTeamMember(taskToEdit.assigned_to);
+      setEditingTaskStatus(taskToEdit.status);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    const editedTask = {
+      id: editingTaskId,
+      description: editingTaskDescription, 
+      status: editingTaskStatus, 
+      updated_by: user?.id,
+      userRole : user?.role
+    };
+  
+    // Jika role adalah 'Lead', tambahkan title dan assigned_to
+    if (user.role === 'Lead') {
+      editedTask.title = editingTaskTitle;
+      editedTask.assigned_to = Number(editSelectedTeamMember); 
+    }
+  
+    await editTodo(editedTask);
+    setEditingTaskId(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingTaskId(null);
+    setEditingTaskTitle('');
+    setEditingTaskDescription('');
+    setEditSelectedTeamMember(''); 
+    setEditingTaskStatus('');
+  };
+
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.js
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+    <div>
+      <Navbar token={token} setToken={setToken} setUser={setUser} user={user} />
+      <main className="p-4">
+        {token ? (
+          <>
+            {
+              user.role === "Lead" && (
+                <h2 className="text-xl font-semibold mb-4">
+                  {!editingTaskId ? 'Buat' : 'Edit'} Todo List
+                </h2>
+              )
+            }
+            {user?.role === 'Lead' && editingTaskId === null && (
+              <CreateTask
+                newTaskTitle={newTaskTitle}
+                setNewTaskTitle={setNewTaskTitle}
+                handleCreateTask={handleCreateTask}
+                teamMembers={teamMembers}
+                selectedTeamMember={selectedTeamMember}
+                setSelectedTeamMember={setSelectedTeamMember}
+                setNewTaskDescription={setNewTaskDescription}
+                newTaskDescription={newTaskDescription}
+                statusOptions={statusOptions}
+                selectedStatus={selectedStatus}
+                setSelectedStatus={setSelectedStatus}
+              />
+            )}
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+            {editingTaskId && (
+              <EditTask
+                editingTaskTitle={editingTaskTitle}
+                setEditingTaskTitle={setEditingTaskTitle}
+                editingTaskDescription={editingTaskDescription}
+                setEditingTaskDescription={setEditingTaskDescription}
+                editSelectedTeamMember={editSelectedTeamMember}
+                setEditSelectedTeamMember={setEditSelectedTeamMember}
+                teamMembers={teamMembers}
+                handleEdit={handleSaveEdit}
+                cancelEdit={handleCancelEdit}
+                statusOptions={statusOptions}
+                editingTaskStatus={editingTaskStatus}
+                setEditingTaskStatus={setEditingTaskStatus}
+                currentUserRole={user.role}
+              />
+            )}
+
+            {
+              user.role === "Lead" && (
+                <hr className="pt-2" />
+              )
+            }
+
+            <h2 className="text-xl font-semibold mb-4">Daftar Todo List</h2>
+
+            <TodoList
+              todos={todos}
+              currentUserRole={user.role}
+              handleEditTask={handleEditTask}
+              loading={loading}
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
+          </>
+        ) : (
+          <div className="min-h-screen flex flex-col items-center justify-center">
+            <h2 className="text-2xl font-semibold mb-6">Selamat Datang di Todos App!</h2>
+            <p className='text-xl font-semibold mb-5 '>Silahkan Melakukan Login / Register untuk menggunakan aplikasi ini!</p>
+            <div className="flex space-x-4">
+              <Image src={Empty} width={300} height={200} alt='empty' priority />
+            </div>
+          </div>
+        )}
       </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
   );
-}
+};
+
+export default HomePage;
