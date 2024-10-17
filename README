@@ -1,0 +1,29 @@
+-- QUERY FOR CRETE TABLE
+
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    role VARCHAR(50) CHECK (role IN ('Lead', 'Team')) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE Todos (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    status VARCHAR(50) CHECK (status IN ('Not Started', 'On Progress', 'Done', 'Reject')) NOT NULL,
+    assigned_to INT REFERENCES Users(id) ON DELETE SET NULL,
+    created_by INT REFERENCES Users(id) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE TodosLogs (
+    id SERIAL PRIMARY KEY,
+    todos_id INT REFERENCES Todos(id) NOT NULL,
+    action VARCHAR(50) CHECK (action IN ('created', 'updated', 'status_changed')) NOT NULL,
+    changed_by INT REFERENCES Users(id) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    description TEXT
+);
